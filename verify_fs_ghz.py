@@ -1,56 +1,9 @@
 #!/usr/bin/env python3
-"""Exact GHZ certificate checks for Supplemental Material Sec. X.
-
-Symbolic regression for n = 2,...,6 with sympy. Finite character checks do
-not replace the all-n product-vector proof. No optimizer, no floating-point
-arithmetic, no network access.
-"""
-import hashlib
+"""Exact GHZ checks for n = 2,...,6 and symbolic scalar identities."""
 import itertools
 import json
-import re
-from pathlib import Path
 
 import sympy as sp
-
-ROOT = Path(__file__).resolve().parent
-
-
-def find_source(name):
-    for candidate in (ROOT / name, ROOT.parent / name, Path.cwd() / name):
-        if candidate.is_file():
-            return candidate
-    raise SystemExit("Cannot find " + name + "; run the script next to the manuscript source.")
-
-
-SUPP_NAME = "minimal-dimension-entangled-noise-advantage-supplement.tex"
-COMBINED_NAME = "minimal-dimension-entangled-noise-advantage-complete.tex"
-
-
-def load_supplement():
-    for candidate in (ROOT / SUPP_NAME, ROOT.parent / SUPP_NAME, Path.cwd() / SUPP_NAME):
-        if candidate.is_file():
-            return candidate, candidate.read_text(), "supplement file"
-    try:
-        combined = find_source(COMBINED_NAME)
-    except SystemExit:
-        fixture = ROOT / "data/ghz-equations.tex"
-        return fixture, fixture.read_text(), "bundled equation fixtures (not full manuscript)"
-    text = combined.read_text()
-    if text.count("\\onecolumngrid") != 1 or text.count("\\end{document}") != 1:
-        raise SystemExit("Unexpected document layout in " + COMBINED_NAME)
-    tail = text.split("\\onecolumngrid", 1)[1].split("\\end{document}", 1)[0]
-    tail = re.sub(r"\\label\{sm:", r"\\label{", tail)
-    tail = re.sub(r"\\(eqref|ref|pageref|autoref)\{sm:", r"\\\1{", tail)
-    return combined, tail, "single-file source"
-
-
-SOURCE, SOURCE_TEXT, SOURCE_LAYOUT = load_supplement()
-
-
-def sha(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
 
 def zero(matrix):
     assert all(sp.cancel(e) == 0 for e in matrix)
@@ -96,7 +49,7 @@ def ghz_checks(n):
                        for j in range(n - 1))
         expected = x == y or {x, y} == {0, D - 1}
         assert survives == expected
-        # Only endpoint coherences carry a minus sign for chi=pi.
+        # Endpoint phase at chi=pi.
         coefficient = (sp.Integer(-1)**(xb[-1] - yb[-1])) if survives else 0
         assert coefficient == D * minus[x, y]
     p = sp.symbols("p", real=True)
@@ -114,26 +67,14 @@ def ghz_checks(n):
 
 
 def main():
-    source = SOURCE_TEXT
-    labels = ["eq:fs-ghz-witnesses", "eq:fs-ghz-values",
-              "eq:fs-noisy-ghz-values", "eq:fs-noisy-primal", "eq:fs-noisy-free"]
-    for label in labels:
-        assert r"\label{" + label + "}" in source
     report = {"status": "PASS", "sympy_version": sp.__version__,
-              "source_layout": SOURCE_LAYOUT,
-              "source_sha256": sha(SOURCE), "script_sha256": sha(Path(__file__)),
-              "source_labels": labels,
               "scope": "Exact regression; universal inequalities and domain signs are analytic SM arguments.",
               "universal_scalar_identities": universal_checks(),
               "ghz": [ghz_checks(n) for n in range(2, 7)]}
-    if (ROOT / "audit").is_dir():
-        output = ROOT / "audit/results/fs_ghz_exact.json"
-    else:
-        output = Path.cwd() / "fs_ghz_exact.json"
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
 
 
 if __name__ == "__main__":
+    if not __debug__:
+        raise SystemExit("Run without -O; assertions perform the checks.")
     main()

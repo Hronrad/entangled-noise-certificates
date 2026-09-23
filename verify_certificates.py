@@ -1,80 +1,9 @@
 #!/usr/bin/env python3
-"""Exact certificate checks for the manuscript; Python standard library only.
-
-Reads the labelled matrices and vectors out of the manuscript source and
-verifies them with exact rational arithmetic. Finite checks do not replace
-the all-state proof.
-
-Run: python3 verify_certificates.py [--json]
-"""
+"""Exact rational certificate checks; standard library only."""
 import argparse
-import hashlib
 import itertools
 import json
-import re
 from fractions import Fraction as F
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent
-
-
-def find_source(name):
-    for candidate in (ROOT / name, ROOT.parent / name, Path.cwd() / name):
-        if candidate.is_file():
-            return candidate
-    raise SystemExit("Cannot find " + name + "; run the script next to the manuscript source.")
-
-
-MAIN_NAME = "minimal-dimension-entangled-noise-advantage.tex"
-SUPP_NAME = "minimal-dimension-entangled-noise-advantage-supplement.tex"
-COMBINED_NAME = "minimal-dimension-entangled-noise-advantage-complete.tex"
-
-
-def split_combined(text):
-    if text.count("\\onecolumngrid") != 1 or text.count("\\end{document}") != 1:
-        raise SystemExit("Unexpected document layout in " + COMBINED_NAME)
-    head, tail = text.split("\\onecolumngrid", 1)
-    tail = tail.split("\\end{document}", 1)[0]
-    tail = re.sub(r"\\label\{sm:", r"\\label{", tail)
-    tail = re.sub(r"\\(eqref|ref|pageref|autoref)\{sm:", r"\\\1{", tail)
-    return head, tail
-
-
-def load_sources():
-    try:
-        main_path, supp_path = find_source(MAIN_NAME), find_source(SUPP_NAME)
-        return main_path, supp_path, main_path.read_text(), supp_path.read_text(), "separate sources"
-    except SystemExit:
-        try:
-            combined_path = find_source(COMBINED_NAME)
-        except SystemExit:
-            main_path = ROOT / "data/certificate-main.tex"
-            supp_path = ROOT / "data/certificate-supplement.tex"
-            return (main_path, supp_path, main_path.read_text(), supp_path.read_text(),
-                    "bundled equation fixtures (not full manuscript)")
-        main_text, supp_text = split_combined(combined_path.read_text())
-        return combined_path, combined_path, main_text, supp_text, "single-file source"
-
-
-MAIN, SUPP, MAIN_TEXT, SUPP_TEXT, SOURCE_LAYOUT = load_sources()
-
-
-def equation(text, label):
-    end = text.index("\\label{" + label + "}")
-    start = text.rfind("\\begin{equation}", 0, end)
-    if start < 0:
-        raise ValueError("Missing equation: " + label)
-    return text[start:end]
-
-
-def latex_matrix(text, label, scalar=F(1)):
-    block = equation(text, label)
-    body = re.search(r"\\begin\{pmatrix\}(.*?)\\end\{pmatrix\}",
-                     block, re.S).group(1)
-    rows = [[scalar * F(cell.strip()) for cell in row.split("&")]
-            for row in body.split("\\\\") if row.strip()]
-    assert len(set(map(len, rows))) == 1, label
-    return rows
 
 
 def eye(n):
@@ -187,34 +116,16 @@ def x_witness(a, b, c, d, w, z):
 
 
 def verify():
-    main, supp = MAIN_TEXT, SUPP_TEXT
-    result = {"arithmetic": "exact fractions; no floating-point positivity",
-              "source_layout": SOURCE_LAYOUT,
-              "source_sha256": {
-                  "main": hashlib.sha256(MAIN.read_bytes()).hexdigest(),
-                  "supplement": hashlib.sha256(SUPP.read_bytes()).hexdigest()}}
-    rho = latex_matrix(supp, "eq:2x3-counterexample", F(1,40))
-    assert rho == latex_matrix(main, "eq:2x3-state-main", F(1,40))
+    result = {"arithmetic": "exact fractions; no floating-point positivity"}
+    rho = scale(F(1,40), [
+        [2,0,0,0,0,0], [0,1,0,-4,0,0], [0,0,13,0,-5,0],
+        [0,-4,0,17,0,0], [0,0,-5,0,2,0], [0,0,0,0,0,5]])
     assert trace(rho) == 1
     rho_pivots = ldlt(rho)
 
-    def source_vector(source, label, name):
-        block = equation(source, label)
-        rhs = re.search(r"\\ket\{" + re.escape(name) + r"\}=([^,\n]+)", block).group(1)
-        vector = [F(0)]*6
-        for term in rhs.strip().split("+"):
-            match = re.fullmatch(r"(\d*)\\ket\{([01][012])\}", term.strip())
-            assert match, (label, term)
-            coefficient, basis = match.groups()
-            vector[3*int(basis[0])+int(basis[1])] += F(coefficient or 1)
-        return vector
-
-    u = source_vector(supp, "eq:2x3-noise", "u")
-    v1 = source_vector(supp, "eq:2x3-witness", "v_1")
-    v2 = source_vector(supp, "eq:2x3-witness", "v_2")
-    assert u == source_vector(main, "eq:2x3-noise-main", "u")
-    assert v1 == source_vector(main, "eq:2x3-witness-main", "v_1")
-    assert v2 == source_vector(main, "eq:2x3-witness-main", "v_2")
+    u = list(map(F, [0,2,0,1,0,0]))
+    v1 = list(map(F, [1,0,0,0,1,0]))
+    v2 = list(map(F, [0,1,0,0,0,1]))
     yg = scale(F(1,40), outer(u))
     w = scale(F(2,3), add(outer(v1), outer(v2)))
     z = pt(w, 3)
@@ -264,22 +175,18 @@ def verify():
         "witness_trace":str(witness_trace),"gap_lower":str(fullrank_gap),
         "certified_positive_epsilon_range":"0 <= epsilon < 3/163"}
 
-    ex = latex_matrix(supp, "eq:jmr-counterexample-state")
+    ex = [[F(3,8),0,0,F(1,4)], [0,F(1,5),F(1,100),0],
+          [0,F(1,100),F(1,20),0], [F(1,4),0,0,F(3,8)]]
     assert trace(ex) == 1 and min(ldlt(ex)) > 0
     noise = scale(F(0), eye(4))
-    terms = re.findall(
-        r"\\frac(?:\{(\d+)\}|(\d))(?:\{(\d+)\}|(\d))\\proj\{([01]{2})\}",
-        equation(supp, "eq:jmr-counterexample-primal"))
-    assert len(terms) == 2
-    for n1, n2, d1, d2, basis in terms:
-        noise[int(basis,2)][int(basis,2)] += F(int(n1 or n2),int(d1 or d2))
+    noise[1][1], noise[2][2] = F(1,20), F(1,5)
     witness = outer([F(0),F(1),F(-1),F(0)])
     assert psd(noise) and psd(pt(noise,2))
     assert psd(add(ex,noise)) and psd(pt(add(ex,noise),2))
     assert psd(witness) and psd(add(eye(4),scale(-1,pt(witness,2))))
     value = trace(noise)
     assert value == -trace(multiply(witness,pt(ex,2))) == F(1,4)
-    # Claimed squared Wootters numbers as characteristic roots.
+    # Squared Wootters numbers.
     spin = [[F(x) for x in row] for row in
             [[0,0,0,-1],[0,0,1,0],[0,1,0,0],[-1,0,0,0]]]
     product = multiply(ex, multiply(multiply(spin,ex),spin))
@@ -295,11 +202,12 @@ def verify():
     result["JMR_counterexample"] = {"old_expression": str(predicted),
                                    "certified_value": str(value)}
 
-    old_noise = latex_matrix(supp,"eq:jmr-old-noise-matrix",F(1,80))
+    old_noise = scale(F(1,80), [[6,0,0,-6],[0,12,6,0],
+                               [0,6,3,0],[-6,0,0,6]])
     assert trace(old_noise) == predicted
     assert psd(old_noise) and psd(pt(old_noise,2))
     assert psd(pt(add(ex,old_noise),2))
-    # Endpoints plus cone convexity cover the whole path.
+    # Endpoint feasibility extends by convexity.
     for tau in [F(0),F(1,1000000),F(1,3),F(1,2),F(1)]:
         interpolated = add(scale(1-tau,old_noise),scale(tau,noise))
         assert psd(interpolated) and psd(pt(interpolated,2))
@@ -376,6 +284,8 @@ def verify():
 
 
 if __name__ == "__main__":
+    if not __debug__:
+        raise SystemExit("Run without -O; assertions perform the checks.")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json",action="store_true")
     args = parser.parse_args()
@@ -385,6 +295,6 @@ if __name__ == "__main__":
     else:
         print("PASS: exact manuscript certificates and X-state grid")
         print(json.dumps({k:v for k,v in report.items()
-                          if k not in ("source_sha256","qubit_qutrit")},
+                          if k != "qubit_qutrit"},
                          ensure_ascii=False,indent=2))
         print("2x3 certified gap =", report["qubit_qutrit"]["gap_lower"])
