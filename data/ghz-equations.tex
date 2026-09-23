@@ -1,0 +1,46 @@
+% Minimal equation fixtures; not a standalone manuscript.
+
+\begin{align}
+ \ket{g_n^\pm}&=\frac{\ket{0^n}\pm\ket{1^n}}{\sqrt2},
+ &G_n^\pm&=\proj{g_n^\pm},
+ \nonumber\\
+ E_n&=\proj{0^n}+\proj{1^n},
+ &\Pi_n&=I_D-E_n,
+ \nonumber\\
+ C_n&=\ket{0^n}\bra{1^n}+\ket{1^n}\bra{0^n},
+ &\sigma_\pm&=\frac{I_D\pm C_n}{D}.
+ \label{eq:fs-ghz-operators}
+\end{align}
+
+\begin{equation}
+ Z_{\mathrm s}=\alpha_n\Pi_n-\beta_n C_n,
+ \qquad Z_{\mathrm g}=Z_{\mathrm s}/\beta_n
+ \label{eq:fs-ghz-witnesses}
+\end{equation}
+
+\begin{equation}
+ \boxed{R_{\mathrm g}^{\FS_N}(G_n^+)=1,\qquad
+ R_{\mathrm s}^{\FS_N}(G_n^+)=2^{n-2}.}
+ \label{eq:fs-ghz-values}
+\end{equation}
+
+\begin{align}
+ R_{\mathrm g}^{\FS_N}(\rho_{n,p})
+ &=\max\{0,1-p-2p/D\},\nonumber\\
+ R_{\mathrm s}^{\FS_N}(\rho_{n,p})
+ &=\max\{0,D(1-p)/4-p/2\}
+ =2^{n-2}R_{\mathrm g}^{\FS_N}(\rho_{n,p}),
+ \label{eq:fs-noisy-ghz-values}
+\end{align}
+
+\begin{align}
+ \rho_{n,p}+sG_n^-&=p\sigma_++(1-p-p/D)E_n,\nonumber\\
+ \rho_{n,p}+t\sigma_-&=(p+t)\sigma_++(1-p)E_n/2.
+ \label{eq:fs-noisy-primal}
+\end{align}
+
+\begin{equation}
+ \rho_{n,p}=\kappa\sigma_++(p/D)E_n+
+ \left[p/D-(1-p)/2\right]\Pi_n.
+ \label{eq:fs-noisy-free}
+\end{equation}
